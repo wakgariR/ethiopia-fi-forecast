@@ -1,5 +1,7 @@
 import pandas as pd
 import os
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 def load_fi_data(file_path):
     """
@@ -117,3 +119,33 @@ def list_unique_indicators(df):
         latest_value=('value_numeric', 'last'),
         unit=('unit', 'first')
     )
+
+class DataAnalyzer:
+    def __init__(self, df):
+        self.df = df
+        self.obs = df[df['record_type'] == 'observation'].copy()
+
+    def summarize_dimensions(self):
+        """Summarizes dataset by key categorical dimensions."""
+        dims = ['record_type', 'pillar', 'source_type']
+        summary = {dim: self.df[dim].value_counts(dropna=False) for dim in dims}
+        return summary
+
+    def get_temporal_matrix(self):
+        """Creates a matrix of indicator coverage over time."""
+        # Convert observation_date to year for grouping
+        self.obs['year'] = pd.to_datetime(self.obs['observation_date']).dt.year
+        matrix = self.obs.groupby(['indicator_code', 'year']).size().unstack(fill_value=0)
+        return matrix
+
+    def assess_quality(self):
+        """Analyzes the distribution of confidence levels across observations."""
+        return self.obs['confidence'].value_counts(normalize=True) * 100
+
+    def identify_gaps(self):
+        """Identifies indicators with sparse or outdated coverage."""
+        indicator_stats = self.obs.groupby('indicator_code').agg(
+            total_points=('value_numeric', 'count'),
+            latest_year=('observation_date', lambda x: pd.to_datetime(x).max().year)
+        )
+        return indicator_stats[indicator_stats['total_points'] < 3] # Gaps = less than 3 data points
